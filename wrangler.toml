@@ -1,0 +1,36 @@
+name = "thecalling-platform"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+WEBHOOK_BASE_URL = "https://thecalling-platform.adrper79.workers.dev"
+
+# Secrets are set via `wrangler secret put <KEY>` or the deploy script.
+# Required secrets (from SECRETS-THECALLING.ini → Env interface mapping):
+#
+# wrangler secret put NEON_DATABASE_URL      ← value of NEON_CONNECTION_STRING
+# wrangler secret put TELNYX_API_KEY         ← value of TELNYX_API_KEY
+# wrangler secret put TELNYX_CONNECTION_ID   ← value of TELNYX_CONNECTION_ID
+# wrangler secret put TELNYX_PHONE_NUMBER    ← value of TELNYX_PHONE_NUMBER
+# wrangler secret put DEEPGRAM_API_KEY       ← value of DEEPGRAM_API_TOKEN
+# wrangler secret put ASSEMBLYAI_API_KEY     ← value of ASSEMBLYAI_API_KEY
+# wrangler secret put ELEVENLABS_API_KEY     ← value of ELEVENLABS_API_KEY
+# wrangler secret put ELEVENLABS_VOICE_ID    ← set to "21m00Tcm4TlvDq8ikWAM" (Rachel) or desired voice
+# wrangler secret put OPENAI_API_KEY         ← value of OPENAI_API_KEY
+# wrangler secret put STRIPE_SECRET_KEY      ← value of STRIPE_SECRET_KEY (must be non-expired)
+# wrangler secret put STRIPE_WEBHOOK_SECRET  ← from Stripe Dashboard → Webhooks → Signing secret
+# wrangler secret put REDIS_ENDPOINT         ← value of REDIS_PUBLIC_ENDPOINT
+# wrangler secret put REDIS_API_KEY          ← value of REDIS_API_KEY
+# wrangler secret put SENTRY_DSN             ← from Sentry.io → Project → Client Keys (DSN)
+# wrangler secret put RESEND_API_KEY         ← value of RESEND_API_TOKEN
+# wrangler secret put ADMIN_API_KEY          ← generate a strong random API key
+
+[dev]
+port = 8787
+
+# Production route (configure when deploying with custom domain)
+# [[routes]]
+# pattern = "api.thecalling.io/*"
+# zone_id = "a972897eca0713bf8fe8baa61c955083"
