@@ -244,4 +244,122 @@
 
 ---
 
+## Lesson: Next.js Static Export Cannot Use Dynamic Routes With Empty `generateStaticParams`
+**Date:** 2026-02-25
+**Category:** Technical
+
+**What Happened:** Next.js 15 with `output: 'export'` threw a build error for dynamic `[id]` route segments. `generateStaticParams` must return at least one param set at build time, but game IDs are runtime-only (stored in DB).
+
+**Root Cause:** Static export bakes all routes at build time. Dynamic segments require `generateStaticParams` to enumerate all valid values upfront. Returning `[]` is not allowed — Next won't generate any HTML for the route and errors.
+
+**Impact:** Build failed until all `[id]` routes were eliminated from the frontend.
+
+**Resolution:** Converted all dynamic routes (`/games/[id]`, `/admin/games/[id]`) to static routes with query params (`/games/detail?id=`, `/admin/games/detail?id=`). Client components use `useSearchParams()` to read the ID at runtime. Pages wrapped in `<Suspense>` for hydration compatibility.
+
+**Prevention:** For fully static-exported Next.js apps, never use `[param]` route segments unless you have a fixed set of IDs known at build time (e.g., from a CMS or config file). Use query strings for runtime-variable IDs.
+
+---
+
+## Lesson: Cloudflare Worker Routes Must Be Narrowed to API Paths Only When Co-Hosting With Pages
+**Date:** 2026-02-25
+**Category:** Architecture
+
+**What Happened:** Worker had `thecalling.club/*` as a route. This intercepted ALL traffic to the domain — including frontend page navigations — causing 400 errors on any non-API route (e.g., `/admin/games`).
+
+**Root Cause:** Cloudflare route matching: Worker routes take priority over Pages. A wildcard Worker route swallows every request before it reaches CF Pages.
+
+**Impact:** Frontend admin pages returned 400 Worker errors. Users couldn't navigate to any page the Worker didn't explicitly handle.
+
+**Resolution:** Narrowed Worker routes to specific API paths: `thecalling.club/api/*`, `thecalling.club/health`, `thecalling.club/webhooks/*`. All other paths fall through to CF Pages.
+
+**Prevention:** When deploying a Worker alongside CF Pages on the same custom domain, always use the most specific route patterns possible. Never use `domain.com/*` as a Worker route if CF Pages should serve any paths.
+
+---
+
+## Lesson: Worker Admin Route Prefix Must Not Conflict With Pages UI Routes
+**Date:** 2026-02-25
+**Category:** Architecture
+
+**What Happened:** Worker had admin API routes at `/admin/*`. The frontend also has admin UI pages at `/admin/*` (CF Pages). Even after narrowing the Worker route from `thecalling.club/*` to specific paths, having `thecalling.club/admin/*` as a Worker route intercepted browser navigations to the frontend admin UI.
+
+**Root Cause:** The Worker's Hono routes and the Pages frontend used the same `/admin/` path prefix. Worker route `thecalling.club/admin/*` matched browser requests to frontend admin pages.
+
+**Impact:** `thecalling.club/admin/games` returned a Worker 400/404 instead of the frontend admin UI.
+
+**Resolution:** Renamed all Worker admin API routes from `/admin/*` to `/api/admin/*`. Removed `thecalling.club/admin/*` Worker route. Updated all frontend `api.ts` calls from `/admin/...` to `/api/admin/...`. Now: `/admin/*` → CF Pages UI; `/api/admin/*` → Worker API.
+
+**Prevention:** All Worker API routes should live under `/api/`. Frontend UI routes should never share a prefix with backend API routes. Adopt `/api/*` as the universal API prefix convention from project start.
+
+---
+
+## Lesson: Cloudflare Pages `production_branch` Can Be Corrupted by CLI
+**Date:** 2026-02-25
+**Category:** Deployment
+
+**What Happened:** All `npx wrangler pages deploy --branch main` deploys showed "Deployment complete!" but were silently creating **preview** deployments instead of production. The custom domain `thecalling.club` kept serving the original (stale) production deployment from the first deploy.
+
+**Root Cause:** The `production_branch` project setting was corrupted — it was set to the command string `"ler pages deploy out/ --project-name thecalling-web --commit-dirty=true 2>&1"` instead of `"main"`. With no matching production branch, all subsequent deploys defaulted to preview environment.
+
+**Impact:** Every fix deployed over 5+ rounds was silently going to preview only. Live site was serving the stale first deploy (missing favicon, old routes, etc.).
+
+**Resolution:** Used `PATCH /accounts/{id}/pages/projects/{name}` CF API to set `production_branch: "main"`. Next deploy immediately became production and served updated build.
+
+**Prevention:** After initial Pages project creation, verify `production_branch` via the API or dashboard before iterating. Check deployment environment in the deploy output — "production" vs "preview" indicates whether the custom domain will update. Add a verification step: `curl CF_API .../deployments | check environment == production`.
+
+---
+
+## Lesson: Next.js 15 `themeColor` Must Be in `Viewport` Export, Not `Metadata`
+**Date:** 2026-02-25
+**Category:** Technical
+
+**What Happened:** Build produced a warning: "Unsupported metadata `themeColor` is configured in metadata export. Please move it to `viewport` export instead."
+
+**Root Cause:** Next.js 15 separated viewport-specific metadata (themeColor, colorScheme, width, etc.) into a dedicated `Viewport` type that must be exported separately.
+
+**Impact:** Build warning; themeColor may not render correctly in browser.
+
+**Resolution:** 
+```typescript
+// Before (incorrect):
+export const metadata: Metadata = { themeColor: '#0A0A0F' };
+
+// After (correct):
+import type { Metadata, Viewport } from 'next';
+export const viewport: Viewport = { themeColor: '#0A0A0F' };
+```
+
+**Prevention:** In Next.js 15+, always use `export const viewport: Viewport = {...}` for any viewport-related meta tags. Reserve `metadata` export for title, description, icons, openGraph, etc.
+
+---
+
+## Lesson: `wrangler pages deploy` With `--branch` Does Not Equal CI/CD Production Deploy
+**Date:** 2026-02-25
+**Category:** Deployment
+
+**What Happened:** Passing `--branch main` to `wrangler pages deploy` was assumed to make a production deployment. It does not — branch name alone doesn't determine environment. The project's `production_branch` setting must match the branch name for the deploy to be classified as "production".
+
+**Root Cause:** Misunderstanding of how CF Pages classifies deployments: the project-level `production_branch` config (set in the project settings) is what determines if a deploy is production. The `--branch` flag is just metadata.
+
+**Impact:** Multiple rounds of fixes deployed as preview-only, wasting time diagnosing why the live site wasn't updating.
+
+**Prevention:** After creating a Pages project via CLI, immediately verify `production_branch` matches your deploy branch (`"main"`) via the API. Alternatively, use the CF Pages dashboard to connect a GitHub repo for automatic production deploys on push, which handles this correctly.
+
+---
+
+## Lesson: `public/` Assets Must Be Synced to WSL Build Dir Before Deploy
+**Date:** 2026-02-25
+**Category:** Process
+
+**What Happened:** `favicon.svg` was created in `THECALLING-WEB/public/` (Windows path) but the WSL build dir `/tmp/tcweb2/` had been set up via `rsync` earlier. New files added to the Windows project after the rsync are not automatically present in the WSL build dir.
+
+**Root Cause:** WSL build dir is a one-time rsync snapshot. Any new files added to the Windows project path are not automatically propagated.
+
+**Impact:** `favicon.svg` was missing from `out/` (build output), causing 404 on the live site even though the file existed in `public/`.
+
+**Resolution:** Manually copied the file: `cp "/mnt/c/.../public/favicon.svg" /tmp/tcweb2/out/favicon.svg`. Then redeployed.
+
+**Prevention:** When adding files to `public/` or any static asset directory, always re-rsync (or manually copy) to the WSL build dir before deploying. Consider making the deploy workflow script include a targeted rsync of `public/` before running `npm run build`.
+
+---
+
 _More lessons will be captured as development progresses._
