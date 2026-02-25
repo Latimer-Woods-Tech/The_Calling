@@ -39,10 +39,6 @@ pattern = "thecalling.club/api/*"
 zone_id = "a972897eca0713bf8fe8baa61c955083"
 
 [[routes]]
-pattern = "thecalling.club/admin/*"
-zone_id = "a972897eca0713bf8fe8baa61c955083"
-
-[[routes]]
 pattern = "thecalling.club/health"
 zone_id = "a972897eca0713bf8fe8baa61c955083"
 

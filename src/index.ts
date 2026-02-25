@@ -135,7 +135,7 @@ app.post('/webhooks/stripe', async (c) => {
 // ADMIN ROUTES (protected)
 // ============================================================================
 
-app.route('/admin', admin);
+app.route('/api/admin', admin);
 
 // ============================================================================
 // EXPORT
