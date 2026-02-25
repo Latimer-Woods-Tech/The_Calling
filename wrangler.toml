@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
-WEBHOOK_BASE_URL = "https://thecalling-platform.adrper79.workers.dev"
+WEBHOOK_BASE_URL = "https://thecalling.club"
 
 # Secrets are set via `wrangler secret put <KEY>` or the deploy script.
 # Required secrets (from SECRETS-THECALLING.ini → Env interface mapping):
@@ -30,7 +30,22 @@ WEBHOOK_BASE_URL = "https://thecalling-platform.adrper79.workers.dev"
 [dev]
 port = 8787
 
-# Production route (configure when deploying with custom domain)
-# [[routes]]
-# pattern = "api.thecalling.io/*"
-# zone_id = "a972897eca0713bf8fe8baa61c955083"
+# Worker routes — API, admin, health, and webhooks only.
+# All other paths on thecalling.club are served by CF Pages (thecalling-web).
+# www.thecalling.club is handled entirely by CF Pages.
+
+[[routes]]
+pattern = "thecalling.club/api/*"
+zone_id = "a972897eca0713bf8fe8baa61c955083"
+
+[[routes]]
+pattern = "thecalling.club/admin/*"
+zone_id = "a972897eca0713bf8fe8baa61c955083"
+
+[[routes]]
+pattern = "thecalling.club/health"
+zone_id = "a972897eca0713bf8fe8baa61c955083"
+
+[[routes]]
+pattern = "thecalling.club/webhooks/*"
+zone_id = "a972897eca0713bf8fe8baa61c955083"
