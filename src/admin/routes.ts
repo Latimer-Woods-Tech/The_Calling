@@ -11,13 +11,35 @@ import { VoiceGamePlatform } from '../core/platform.js';
 
 const admin = new Hono<{ Bindings: Env }>();
 
+/**
+ * Constant-time string comparison to prevent timing attacks on the API key.
+ */
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.generateKey(
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ) as CryptoKey;
+  const [sigA, sigB] = await Promise.all([
+    crypto.subtle.sign('HMAC', key, encoder.encode(a)),
+    crypto.subtle.sign('HMAC', key, encoder.encode(b)),
+  ]);
+  const aArr = new Uint8Array(sigA);
+  const bArr = new Uint8Array(sigB);
+  let diff = 0;
+  for (let i = 0; i < aArr.length; i++) {
+    diff |= aArr[i] ^ bArr[i];
+  }
+  return diff === 0;
+}
+
 // ---- Middleware: API key authentication ----
 admin.use('*', async (c, next) => {
   const authHeader = c.req.header('Authorization');
   const apiKey = authHeader?.replace('Bearer ', '');
 
-  // Simple API key check — in production, use a proper auth system
-  if (!apiKey || apiKey !== c.env.ADMIN_API_KEY) {
+  if (!apiKey || !(await timingSafeEqual(apiKey, c.env.ADMIN_API_KEY))) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 

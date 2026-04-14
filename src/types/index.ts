@@ -22,6 +22,7 @@ export interface Env {
   RESEND_API_KEY: string;
   WEBHOOK_BASE_URL: string;
   ADMIN_API_KEY: string;
+  TELNYX_WEBHOOK_PUBLIC_KEY?: string;
 }
 
 // ---- Database Models ----

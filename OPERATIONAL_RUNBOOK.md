@@ -147,7 +147,7 @@ bash scripts/deploy-secrets.sh
 
 ### 4.1 Create a New Game
 ```bash
-ADMIN_KEY="0d81cce553c2d5243adedcf754c40d267732b638d43338a921ff7d43983abf1b"
+ADMIN_KEY="<your-admin-api-key>"  # retrieve from wrangler secret list or your password manager
 TEMPLATE_ID="7d8ef6a1-eede-4a12-bdd0-f55e8a97b5c9"
 
 curl -s -X POST https://thecalling-platform.adrper79.workers.dev/admin/games \

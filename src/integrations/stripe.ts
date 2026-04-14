@@ -145,7 +145,15 @@ export class StripeClient {
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
-    return expectedSig === v1Sig;
+    // Constant-time comparison to prevent timing attacks
+    const expectedBytes = encoder.encode(expectedSig);
+    const actualBytes = encoder.encode(v1Sig);
+    if (expectedBytes.length !== actualBytes.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expectedBytes.length; i++) {
+      diff |= expectedBytes[i] ^ actualBytes[i];
+    }
+    return diff === 0;
   }
 
   async healthCheck(): Promise<boolean> {

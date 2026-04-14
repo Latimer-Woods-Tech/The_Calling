@@ -19,14 +19,19 @@ import { admin } from './admin/routes.js';
 const app = new Hono<{ Bindings: Env }>();
 
 // ---- Global Middleware ----
-app.use('*', cors());
+app.use('*', cors({
+  origin: ['https://thecalling.club', 'https://www.thecalling.club'],
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'stripe-signature'],
+}));
 app.use('*', logger());
 
 // Global error handler
 app.onError((err, c) => {
   console.error('[Error]', err.message, err.stack);
+  const isDev = c.env.ENVIRONMENT !== 'production';
   return c.json(
-    { error: 'Internal server error', message: err.message },
+    { error: 'Internal server error', ...(isDev && { message: err.message }) },
     500
   );
 });
@@ -104,17 +109,79 @@ app.post('/api/games/:id/register', async (c) => {
 // ============================================================================
 
 /**
+ * Verify a Telnyx Ed25519 webhook signature.
+ * See: https://developers.telnyx.com/docs/webhooks/receiving-webhooks#validate-signatures
+ */
+async function verifyTelnyxSignature(
+  body: string,
+  signature: string,
+  timestamp: string,
+  publicKeyBase64: string
+): Promise<boolean> {
+  try {
+    const age = Math.abs(Date.now() / 1000 - parseInt(timestamp, 10));
+    if (age > 300) return false; // reject events older than 5 minutes
+
+    const encoder = new TextEncoder();
+    const message = encoder.encode(`${timestamp}|${body}`);
+    const sigBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
+    const keyBytes = Uint8Array.from(atob(publicKeyBase64), (c) => c.charCodeAt(0));
+
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      { name: 'Ed25519' },
+      false,
+      ['verify']
+    );
+    return crypto.subtle.verify('Ed25519', key, sigBytes, message);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Telnyx voice webhooks - per game instance
  */
 app.post('/webhooks/telnyx/:gameId', async (c) => {
   const gameId = c.req.param('gameId');
-  const payload = await c.req.json();
+  const rawBody = await c.req.text();
+
+  // Verify Telnyx webhook signature when public key is configured
+  if (c.env.TELNYX_WEBHOOK_PUBLIC_KEY) {
+    const signature = c.req.header('telnyx-signature-ed25519') ?? '';
+    const timestamp = c.req.header('telnyx-timestamp') ?? '';
+
+    if (!signature || !timestamp) {
+      return c.json({ error: 'Missing webhook signature headers' }, 401);
+    }
+
+    const isValid = await verifyTelnyxSignature(
+      rawBody,
+      signature,
+      timestamp,
+      c.env.TELNYX_WEBHOOK_PUBLIC_KEY
+    );
+    if (!isValid) {
+      console.error('[Telnyx Webhook] Invalid signature for game:', gameId);
+      return c.json({ error: 'Invalid signature' }, 401);
+    }
+  } else {
+    console.warn('[Telnyx Webhook] TELNYX_WEBHOOK_PUBLIC_KEY not set — signature validation is disabled');
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
 
   const platform = new VoiceGamePlatform(c.env);
   const state = new GameStateManager(c.env.REDIS_ENDPOINT, c.env.REDIS_API_KEY);
   const handler = new TelnyxWebhookHandler(platform, state);
 
-  return handler.handleEvent(gameId, payload);
+  return handler.handleEvent(gameId, payload as any);
 });
 
 /**
