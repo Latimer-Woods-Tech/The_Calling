@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import type { Env } from './types/index.js';
+import type { Env, TelnyxWebhookPayload } from './types/index.js';
 import { VoiceGamePlatform } from './core/platform.js';
 import { GameStateManager } from './state/game-state.js';
 import { StripeClient } from './integrations/stripe.js';
@@ -119,8 +119,8 @@ async function verifyTelnyxSignature(
   publicKeyBase64: string
 ): Promise<boolean> {
   try {
-    const age = Math.abs(Date.now() / 1000 - parseInt(timestamp, 10));
-    if (age > 300) return false; // reject events older than 5 minutes
+    const age = Date.now() / 1000 - parseInt(timestamp, 10);
+    if (age < 0 || age > 300) return false; // reject future or stale events (>5 min)
 
     const encoder = new TextEncoder();
     const message = encoder.encode(`${timestamp}|${body}`);
@@ -181,7 +181,7 @@ app.post('/webhooks/telnyx/:gameId', async (c) => {
   const state = new GameStateManager(c.env.REDIS_ENDPOINT, c.env.REDIS_API_KEY);
   const handler = new TelnyxWebhookHandler(platform, state);
 
-  return handler.handleEvent(gameId, payload as any);
+  return handler.handleEvent(gameId, payload as TelnyxWebhookPayload);
 });
 
 /**

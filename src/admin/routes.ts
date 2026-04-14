@@ -27,6 +27,7 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
   ]);
   const aArr = new Uint8Array(sigA);
   const bArr = new Uint8Array(sigB);
+  if (aArr.length !== bArr.length) return false;
   let diff = 0;
   for (let i = 0; i < aArr.length; i++) {
     diff |= aArr[i] ^ bArr[i];
